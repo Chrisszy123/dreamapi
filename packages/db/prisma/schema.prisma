@@ -1,0 +1,110 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  walletAddress String       @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  devices       Device[]
+  trades        Trade[]
+  xpEvents      XpEvent[]
+  referralCode  ReferralCode?
+  referralsMade Referral[]   @relation("referrer")
+  referralsReceived Referral[] @relation("referee")
+  priceAlerts   PriceAlert[]
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  deviceId         String
+  refreshTokenHash String
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([refreshTokenHash])
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  userId    String
+  deviceId  String
+  pushToken String
+  platform  String
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, deviceId])
+}
+
+model Trade {
+  id        String    @id @default(cuid())
+  userId    String
+  symbol    String
+  side      String
+  size      Decimal
+  price     Decimal
+  volumeUsd Decimal
+  filledAt  DateTime
+  user      User      @relation(fields: [userId], references: [id])
+  xpEvents  XpEvent[]
+
+  @@index([userId, filledAt(sort: Desc)])
+}
+
+model XpEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  amount    Int
+  reason    String
+  tradeId   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  trade     Trade?   @relation(fields: [tradeId], references: [id])
+
+  @@index([userId, createdAt(sort: Desc)])
+}
+
+model Referral {
+  id         String   @id @default(cuid())
+  referrerId String
+  refereeId  String   @unique
+  createdAt  DateTime @default(now())
+  referrer   User     @relation("referrer", fields: [referrerId], references: [id])
+  referee    User     @relation("referee", fields: [refereeId], references: [id])
+
+  @@index([referrerId])
+}
+
+model ReferralCode {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  code      String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model PriceAlert {
+  id          String    @id @default(cuid())
+  userId      String
+  symbol      String
+  threshold   Decimal
+  direction   String
+  triggeredAt DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([triggeredAt])
+}

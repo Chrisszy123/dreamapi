@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format check
+        run: pnpm format:check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dreamapi_test
+          POSTGRES_PASSWORD: dreamapi_test
+          POSTGRES_DB: dreamapi_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate test secrets
+        id: secrets
+        run: |
+          echo "jwt_secret=$(openssl rand -hex 32)" >> $GITHUB_OUTPUT
+          echo "jwt_refresh_secret=$(openssl rand -hex 32)" >> $GITHUB_OUTPUT
+          echo "webhook_secret=$(openssl rand -hex 16)" >> $GITHUB_OUTPUT
+          echo "trading_key=0x$(openssl rand -hex 32)" >> $GITHUB_OUTPUT
+
+      - name: Prisma generate
+        run: pnpm exec prisma generate
+        working-directory: packages/db
+
+      - name: Run migrations
+        run: pnpm exec prisma migrate deploy
+        working-directory: packages/db
+        env:
+          DATABASE_URL: postgresql://dreamapi_test:dreamapi_test@localhost:5432/dreamapi_test
+
+      - name: Test
+        run: pnpm test
+        env:
+          DATABASE_URL: postgresql://dreamapi_test:dreamapi_test@localhost:5432/dreamapi_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ${{ steps.secrets.outputs.jwt_secret }}
+          JWT_REFRESH_SECRET: ${{ steps.secrets.outputs.jwt_refresh_secret }}
+          TRADING_PRIVATE_KEY: ${{ steps.secrets.outputs.trading_key }}
+          WEBHOOK_SECRET: ${{ steps.secrets.outputs.webhook_secret }}
+          NODE_ENV: test
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t dreamapi/api:latest .
+
+      - name: Build Worker image
+        run: docker build -f apps/worker/Dockerfile -t dreamapi/worker:latest .

@@ -1,0 +1,909 @@
+# DreamAPI — Cursor Rules
+# Hyperliquid Trading Backend
+# Author: Bassey Goodluck Gabriel
+# Stack: TypeScript · Node.js · Fastify · PostgreSQL · Redis · BullMQ · Hyperliquid API
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. PROJECT IDENTITY
+# ─────────────────────────────────────────────────────────────────────────────
+
+You are a senior backend engineer building DreamAPI — a production-quality
+TypeScript/Node.js backend that mirrors the infrastructure behind Dreamcash,
+a self-custodial mobile trading app built on Hyperliquid.
+
+This is a portfolio project targeting the Dreamcash backend engineer role.
+Every file you write will be read and judged by their engineering team.
+Write code that proves you belong on that team.
+
+Modules to build:
+  1. Auth             — EIP-712 wallet sign-in, JWT sessions, webhook verification
+  2. Market data      — Hyperliquid WebSocket, Redis cache, live price broadcast
+  3. Trading relay    — Order submission, fill tracking, portfolio history
+  4. Points engine    — BullMQ XP pipeline, referral tree, leaderboard (Dreamdrop clone)
+  5. Notifications    — Push (APNs/FCM), SMS, price alerts, fiat on-ramp webhooks
+  6. Observability    — OpenTelemetry, Sentry, Pino structured logging (applied everywhere)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. STACK — USE EXACTLY THESE. NO SUBSTITUTIONS.
+# ─────────────────────────────────────────────────────────────────────────────
+
+Runtime:        Node.js 20 LTS
+Language:       TypeScript 5, strict: true
+Framework:      Fastify 4 + @fastify/swagger + @fastify/swagger-ui
+ORM:            Prisma 5 — PostgreSQL 16
+Cache/Queues:   Redis 7 via ioredis, BullMQ for all background jobs
+Blockchain:     @nktkas/hyperliquid SDK + viem (EIP-712 signature verification)
+Monorepo:       Turborepo + pnpm workspaces
+Observability:  @opentelemetry/sdk-node + @sentry/node + Pino
+Testing:        Vitest + @vitest/coverage-v8 + Supertest
+Notifications:  firebase-admin (FCM) + node-apn (APNs) + twilio (SMS)
+Validation:     Zod (env + domain) + Fastify JSON Schema (route input)
+Container:      Docker + Docker Compose, multi-stage Dockerfile
+CI:             GitHub Actions
+
+Never suggest or introduce: Express, Hono, Drizzle, Mongoose, Axios, Jest,
+Winston, dotenv-safe, or any alternative to the libraries listed above.
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. MONOREPO STRUCTURE — MAINTAIN THIS EXACTLY
+# ─────────────────────────────────────────────────────────────────────────────
+
+dreamapi/
+  apps/
+    api/                    Fastify HTTP + WebSocket server (port 3000)
+      src/
+        app.ts              Fastify instance factory (exported for testing)
+        server.ts           Entry point — builds app, starts listening
+        plugins/            Fastify plugins: auth, cors, swagger, otel, sentry
+        routes/             Route handlers grouped by module
+          auth/
+          markets/
+          trading/
+          points/
+          notifications/
+          webhooks/
+        services/           Business logic called by route handlers
+        middleware/          preHandler hooks: requireAuth, verifyWebhook, rateLimit
+        errors.ts           AppError base class + typed error subclasses
+      tests/
+        integration/        Supertest tests against a real test database
+    worker/                 BullMQ job processor (separate deployable)
+      src/
+        index.ts            Entry point — registers all processors
+        processors/
+          xp-events.ts
+          send-notification.ts
+          leaderboard-snapshot.ts
+          alert-checker.ts
+  packages/
+    db/                     Prisma schema, client, migrations
+      prisma/
+        schema.prisma
+        migrations/
+      src/
+        index.ts            Export PrismaClient singleton
+    hyperliquid/            Hyperliquid API client wrapper
+      src/
+        rest.ts             REST API methods
+        ws.ts               WebSocket client class with reconnection
+        types.ts            Hyperliquid response types
+        index.ts
+    queue/                  BullMQ queue definitions + job type interfaces
+      src/
+        queues.ts           Queue instances (xpEvents, notifications, alerts)
+        types.ts            Job payload interfaces
+        index.ts
+    notifications/          Push + SMS dispatch logic
+      src/
+        fcm.ts
+        apns.ts
+        sms.ts
+        index.ts
+    config/                 Zod env schema, validated config export
+      src/
+        schema.ts
+        index.ts
+    types/                  Shared TypeScript interfaces
+      src/
+        index.ts
+  infra/
+    docker-compose.yml
+    docker-compose.test.yml
+    nginx/
+    .github/
+      workflows/
+        ci.yml
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. TYPESCRIPT RULES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 4.1 Strictness
+- strict: true in every tsconfig.json, no exceptions
+- No `any` types, ever. Use `unknown` and narrow it.
+- No non-null assertions (!) unless you leave a comment explaining why it is
+  guaranteed to be non-null
+- Enable: noUncheckedIndexedAccess, exactOptionalPropertyTypes
+
+# 4.2 Return types
+- All exported functions must have explicit return types
+- All async functions return Promise<T> with T fully typed, never Promise<any>
+
+# 4.3 Result pattern
+- Never throw from service functions. Use a discriminated union result type:
+
+  type Result<T, E = AppError> =
+    | { ok: true; data: T }
+    | { ok: false; error: E }
+
+- Route handlers call services, check result.ok, and respond accordingly
+- Only Fastify's error handler throws — via reply.send(error)
+
+# 4.4 Imports
+- Use absolute imports from package names (e.g. @dreamapi/db, @dreamapi/config)
+- Never use relative imports that cross package boundaries (../../packages/...)
+- Group imports: external packages → internal packages → local files, separated
+  by blank lines
+
+# 4.5 Types file locations
+- Shared types that cross multiple packages → packages/types/src/index.ts
+- Module-specific types → co-located with the module (e.g. routes/auth/types.ts)
+- Hyperliquid API response types → packages/hyperliquid/src/types.ts
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 5. FASTIFY CONVENTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 5.1 App factory
+- Export a buildApp() async function from apps/api/src/app.ts
+- buildApp() registers all plugins and routes, returns the Fastify instance
+- server.ts calls buildApp() then app.listen() — nothing else
+- Tests import buildApp() directly — no network required
+
+# 5.2 Plugins
+- Each plugin lives in src/plugins/ and is registered with fastify.register()
+- Use fp() from fastify-plugin for plugins that decorate the instance
+- Plugin registration order in app.ts:
+    1. config (env validation)
+    2. sentry
+    3. otel
+    4. pino logger
+    5. cors
+    6. rate-limit
+    7. swagger
+    8. auth decorator (decorates request.user)
+    9. routes
+
+# 5.3 Route organisation
+- Each module has its own folder under src/routes/
+- Each folder exports a Fastify plugin that registers its routes
+- Route files define: schema (JSON Schema for request/response), preHandler
+  hooks, and the handler function
+- Handlers are thin — they call a service function and map the result to a
+  response. No business logic in handlers.
+
+# 5.4 Schema-first typing
+- Use @fastify/type-provider-typebox or JSON Schema + Type inference
+- Every route has a schema object defining: params, querystring, body, response
+- The TypeScript types for req.body, req.params etc flow from the schema
+  automatically — never assert them manually
+
+# 5.5 Error handling
+- Define AppError in apps/api/src/errors.ts:
+
+  export class AppError extends Error {
+    constructor(
+      public readonly code: string,
+      public readonly message: string,
+      public readonly statusCode: number,
+      public readonly context?: Record<string, unknown>
+    ) { super(message) }
+  }
+
+  export class UnauthorizedError extends AppError { ... }
+  export class ValidationError extends AppError { ... }
+  export class NotFoundError extends AppError { ... }
+  export class ConflictError extends AppError { ... }
+
+- Register a setErrorHandler in app.ts that maps AppError → structured JSON
+  response and logs with Pino at warn/error level
+- Unhandled errors get status 500 and are sent to Sentry
+
+# 5.6 Auth preHandler
+- Decorate request with user: { id: string; walletAddress: string } | null
+- requireAuth preHandler checks request.user, throws UnauthorizedError if null
+- Never inline JWT verification inside a route handler
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. DATABASE RULES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 6.1 Prisma
+- All queries through the PrismaClient exported from @dreamapi/db
+- Never write raw SQL unless demonstrating query optimisation — if you do,
+  add an EXPLAIN ANALYZE result as a comment directly above the query
+- All schema changes go through prisma migrate dev — never edit migrations
+  manually
+- PrismaClient is a singleton — one instance shared per process
+
+# 6.2 Schema (maintain this — do not add models without updating this file)
+
+  model User {
+    id            String    @id @default(cuid())
+    walletAddress String    @unique
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    sessions      Session[]
+    devices       Device[]
+    trades        Trade[]
+    xpEvents      XpEvent[]
+    referralCode  ReferralCode?
+    referralsMade Referral[] @relation("referrer")
+    referralsReceived Referral[] @relation("referee")
+    priceAlerts   PriceAlert[]
+  }
+
+  model Session {
+    id               String    @id @default(cuid())
+    userId           String
+    deviceId         String
+    refreshTokenHash String
+    expiresAt        DateTime
+    revokedAt        DateTime?
+    createdAt        DateTime  @default(now())
+    user             User      @relation(fields: [userId], references: [id])
+    @@index([userId])
+    @@index([refreshTokenHash])
+  }
+
+  model Device {
+    id        String   @id @default(cuid())
+    userId    String
+    deviceId  String
+    pushToken String
+    platform  String   // "ios" | "android"
+    updatedAt DateTime @updatedAt
+    user      User     @relation(fields: [userId], references: [id])
+    @@unique([userId, deviceId])
+  }
+
+  model Trade {
+    id        String   @id @default(cuid())
+    userId    String
+    symbol    String
+    side      String   // "buy" | "sell"
+    size      Decimal
+    price     Decimal
+    volumeUsd Decimal
+    filledAt  DateTime
+    user      User     @relation(fields: [userId], references: [id])
+    xpEvents  XpEvent[]
+    @@index([userId, filledAt(sort: Desc)])
+  }
+
+  model XpEvent {
+    id        String   @id @default(cuid())
+    userId    String
+    amount    Int
+    reason    String
+    tradeId   String?
+    createdAt DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id])
+    trade     Trade?   @relation(fields: [tradeId], references: [id])
+    @@index([userId, createdAt(sort: Desc)])
+  }
+
+  model Referral {
+    id         String   @id @default(cuid())
+    referrerId String
+    refereeId  String   @unique
+    createdAt  DateTime @default(now())
+    referrer   User     @relation("referrer", fields: [referrerId], references: [id])
+    referee    User     @relation("referee", fields: [refereeId], references: [id])
+    @@index([referrerId])
+  }
+
+  model ReferralCode {
+    id        String   @id @default(cuid())
+    userId    String   @unique
+    code      String   @unique
+    createdAt DateTime @default(now())
+    user      User     @relation(fields: [userId], references: [id])
+  }
+
+  model PriceAlert {
+    id          String    @id @default(cuid())
+    userId      String
+    symbol      String
+    threshold   Decimal
+    direction   String    // "above" | "below"
+    triggeredAt DateTime?
+    createdAt   DateTime  @default(now())
+    user        User      @relation(fields: [userId], references: [id])
+    @@index([userId])
+    @@index([triggeredAt])
+  }
+
+# 6.3 Transactions
+- Use prisma.$transaction() for any operation that writes to multiple tables
+- XP processing (write XpEvent + update referrer) must always be in a transaction
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7. REDIS CONVENTIONS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 7.1 Key naming — always follow this pattern: {namespace}:{entity}:{id}
+  market:mid:{symbol}          Latest mid price, TTL 2s
+  market:book:{symbol}         Latest orderbook snapshot, TTL 2s
+  auth:nonce:{walletAddress}   Sign-in nonce, TTL 5 minutes
+  leaderboard:global           Sorted set — ZADD userId totalXp
+  rate:{action}:{identifier}   Rate limit counter
+
+# 7.2 Operations
+- Always set TTL on keys that should expire — never write persistent data to
+  Redis without a TTL unless it's a sorted set used as a leaderboard
+- Use Redis pipelines when writing multiple keys in one operation
+- The ioredis client is a singleton exported from a shared module
+
+# 7.3 BullMQ queues — defined in packages/queue/src/queues.ts
+  xpEvents           Triggered on every trade fill
+  sendNotification   Triggered when a price alert fires
+  alertChecker       Repeatable — runs every 30 seconds
+  leaderboardSnapshot  Repeatable — runs at midnight UTC
+
+  Queue naming convention: camelCase in code, kebab-case in Redis
+  (BullMQ handles this automatically from the queue name string)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. HYPERLIQUID INTEGRATION
+# ─────────────────────────────────────────────────────────────────────────────
+
+# 8.1 WebSocket client (packages/hyperliquid/src/ws.ts)
+- Connect to wss://api.hyperliquid.xyz/ws
+- Subscriptions to implement: allMids, l2Book, trades, userEvents
+- Reconnection: exponential backoff starting at 1s, max 30s, ±20% jitter
+- After 10 consecutive failures: emit 'fatal' event, capture to Sentry
+- Emit typed events — never emit raw JSON strings
+- Export class HyperliquidWsClient extends EventEmitter
+
+# 8.2 REST client (packages/hyperliquid/src/rest.ts)
+- Wrap @nktkas/hyperliquid SDK methods
+- Methods needed:
+    getMetaAndAssetCtxs()       All markets + asset contexts
+    getL2Snapshot(coin)          Orderbook
+    getUserState(address)        Account equity, positions
+    placeOrder(action, sig)      Submit signed order
+- All methods return Result<T> — never throw
+
+# 8.3 Order signing
+- Use viem's signTypedData for EIP-712 order signing
+- The wallet private key comes from env config (TRADING_PRIVATE_KEY)
+- Never log or expose the private key — Sentry breadcrumbs must exclude it
+- Document the Hyperliquid action hash construction clearly in comments
+
+# 8.4 HIP-3 markets
+- HIP-3 (CASH market) symbols: AAPL, AMZN, GOOGL, TSLA, NVDA, META, MSFT,
+  HOOD, INTC, GOLD, SILVER, COPPER, USA500
+- Tag these with { marketType: 'hip3' } in all market data responses
+- XP multiplier for HIP-3 trades: 2x (configured in packages/config)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 9. AUTH MODULE — EXACT IMPLEMENTATION GUIDE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Flow:
+# 1. Client calls POST /auth/nonce with { walletAddress }
+# 2. Server generates a UUID nonce, stores in Redis with 5min TTL, returns it
+# 3. Client signs: signTypedData({ domain, types, message: { nonce, issued_at } })
+# 4. Client calls POST /auth/verify with { walletAddress, signature }
+# 5. Server verifies with viem verifyTypedData, issues JWT pair
+
+# Route: POST /auth/nonce
+  Body:     { walletAddress: string }   (validate: checksummed Ethereum address)
+  Response: { nonce: string, expiresAt: string }
+  Logic:    generate crypto.randomUUID(), SET auth:nonce:{walletAddress} {nonce} EX 300
+
+# Route: POST /auth/verify
+  Body:     { walletAddress: string, signature: `0x${string}` }
+  Response: { accessToken: string, refreshToken: string, user: { id, walletAddress } }
+  Logic:
+    1. GET auth:nonce:{walletAddress} from Redis — 401 if missing (expired or never issued)
+    2. verifyTypedData({ ... nonce }) using viem — 401 if invalid
+    3. DEL auth:nonce:{walletAddress} (consume nonce — prevent replay)
+    4. Upsert User by walletAddress
+    5. Sign JWT access token: { sub: userId, wallet: walletAddress }, exp: 15m
+    6. Generate refresh token: crypto.randomBytes(48).toString('hex')
+    7. Hash refresh token: crypto.createHash('sha256')
+    8. Insert Session row with hashed token, deviceId from header, expiresAt +30d
+    9. Return access token + refresh token (raw, not hashed)
+
+# Route: POST /auth/refresh
+  Body:     { refreshToken: string }
+  Logic:    Hash input → find Session → check not revoked + not expired →
+            rotate (create new Session, revoke old) → return new token pair
+
+# Route: POST /auth/logout
+  Body:     { refreshToken: string }
+  Logic:    Hash input → set Session.revokedAt = now()
+
+# Webhook verification middleware (apps/api/src/middleware/verifyWebhook.ts)
+  - Read raw body (register @fastify/raw-body on webhook routes)
+  - Read x-signature-256 header
+  - Compute: 'sha256=' + HMAC-SHA256(rawBody, WEBHOOK_SECRET)
+  - Use timingSafeEqual to compare — never ===
+  - Return 401 { code: 'INVALID_SIGNATURE' } on mismatch
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 10. MARKET DATA MODULE — EXACT IMPLEMENTATION GUIDE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Route: GET /markets
+  Response: Array<{ symbol, markPx, openInterest, marketType: 'perp' | 'hip3' }>
+  Logic:    Read from Redis market:mid:* keys (SCAN pattern), fall back to
+            Hyperliquid REST getMetaAndAssetCtxs() if cache cold
+
+# Route: GET /markets/:symbol/orderbook
+  Response: { coin, levels: [bids, asks], time }
+  Logic:    GET market:book:{symbol} from Redis → parse JSON → return
+            On cache miss: call rest.getL2Snapshot(symbol), cache it, return it
+
+# Route: GET /markets/:symbol/price
+  Response: { symbol, price: string, updatedAt: string }
+  Logic:    GET market:mid:{symbol} from Redis
+
+# WebSocket broadcast
+  - Authenticated client connects to ws://api/ws
+  - Client sends: { type: 'subscribe', symbols: ['BTC', 'ETH', 'AAPL'] }
+  - Server tracks subscription in a Map<socketId, Set<symbol>>
+  - Every 500ms: for each connected socket, push latest Redis prices for
+    subscribed symbols as { type: 'prices', data: { BTC: '...', ETH: '...' } }
+  - On disconnect: clean up subscription map
+
+# HyperliquidWsClient lifecycle
+  - Singleton instantiated in app.ts, passed to routes via Fastify decorator
+  - On allMids event: pipeline SET market:mid:{symbol} for all symbols
+  - On l2Book event: SET market:book:{coin} with the snapshot
+  - Client must be started before routes are registered
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. TRADING MODULE — EXACT IMPLEMENTATION GUIDE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Route: POST /orders
+  Auth:     requireAuth
+  Body:     { asset: string, isBuy: boolean, limitPx: string, sz: string,
+              orderType: { limit: { tif: 'Gtc' | 'Ioc' | 'Alo' } } }
+  Response: { status: 'ok', response: { type: 'order', data: { ... } } }
+  Logic:
+    1. Validate asset is in market whitelist (from Redis or config)
+    2. Validate leverage: derive notional from limitPx * sz, check against
+       user equity from getUserState() — reject if implied leverage > 40x
+    3. Sign L1 action using Hyperliquid SDK with TRADING_PRIVATE_KEY
+    4. Call rest.placeOrder() — return result
+    5. On success: do NOT wait for fill — fill tracking happens via WebSocket
+
+# Fill tracking (service, not a route)
+  - On userEvents WS message with type 'fills':
+    for each fill: write Trade row, publish XpEventJob to xpEvents BullMQ queue
+  - userEvents subscription is per-wallet — maintain a Map<walletAddress, WsSubscription>
+  - Subscribe when user first authenticates (look up wallet from JWT), unsubscribe on
+    session expiry
+
+# Route: GET /orders
+  Auth:     requireAuth
+  Query:    { page?: number, limit?: number (max 50), symbol?: string }
+  Response: { data: Trade[], total: number, page: number }
+  Logic:    Prisma findMany with cursor-based pagination on (userId, filledAt DESC)
+            @@index([userId, filledAt(sort: Desc)]) already defined on model
+
+# Route: GET /positions
+  Auth:     requireAuth
+  Response: Live positions from Hyperliquid getUserState(walletAddress)
+  Logic:    Call rest.getUserState(), transform and return — no DB involvement
+
+# Route: GET /portfolio/history
+  Auth:     requireAuth
+  Query:    { from: string (ISO date), to: string (ISO date) }
+  Response: { trades: Trade[], volumeUsd: string, pnl: string }
+  Logic:    Prisma aggregate on Trade table for date range
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 12. POINTS ENGINE — EXACT IMPLEMENTATION GUIDE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# BullMQ processor: xp-events (apps/worker/src/processors/xp-events.ts)
+  Job payload: { userId: string, volumeUsd: number, symbol: string, tradeId: string }
+  Logic:
+    1. Calculate base XP: Math.floor(volumeUsd * 1)        ← 1 XP per $1
+    2. If symbol is HIP-3: xp = xp * 2                     ← 2x multiplier
+    3. prisma.$transaction([
+         prisma.xpEvent.create({ userId, amount: xp, reason: 'trade', tradeId }),
+         propagateToReferrers(userId, xp)
+       ])
+
+  Referral propagation (max 3 levels, 10% passthrough per level):
+    level 1 referrer gets 10% of xp
+    level 2 referrer gets 10% of 10% = 1% of xp
+    level 3 referrer gets 10% of 1% = 0.1% of xp (floor to int, skip if 0)
+    Each propagation writes its own XpEvent with reason: 'referral_l{n}'
+
+# Referral code generation
+  On User creation: generate a short code — nanoid(8), uppercase
+  Store in ReferralCode table
+
+# Route: POST /referrals/register
+  Auth:     requireAuth
+  Body:     { referralCode: string }
+  Logic:
+    1. Find ReferralCode.userId for the code
+    2. Validate: code exists, referee not already referred, not self-referral
+    3. Create Referral { referrerId, refereeId: request.user.id }
+    4. Return { ok: true }
+
+# BullMQ repeatable job: leaderboard-snapshot (midnight UTC)
+  Logic:
+    SELECT userId, SUM(amount) as total FROM XpEvent GROUP BY userId
+    ORDER BY total DESC LIMIT 100
+    ZADD leaderboard:global [score userId ...] (replace existing)
+
+# Route: GET /leaderboard
+  Auth:     requireAuth
+  Logic:    ZREVRANGE leaderboard:global 0 99 WITHSCORES
+            Join with User table to get walletAddress
+  Response: Array<{ rank, userId, walletAddress, totalXp }>
+
+# Route: GET /me/points
+  Auth:     requireAuth
+  Response: {
+    totalXp: number,
+    rank: number,              ← ZREVRANK leaderboard:global userId
+    referralCount: number,     ← Prisma count on Referral where referrerId
+    referralCode: string,
+    recentEvents: XpEvent[]    ← last 20, ordered by createdAt DESC
+  }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. NOTIFICATIONS MODULE — EXACT IMPLEMENTATION GUIDE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Route: POST /devices
+  Auth:     requireAuth
+  Body:     { deviceId: string, pushToken: string, platform: 'ios' | 'android' }
+  Logic:    Prisma upsert on Device (unique: userId + deviceId)
+
+# Route: POST /alerts
+  Auth:     requireAuth
+  Body:     { symbol: string, threshold: string, direction: 'above' | 'below' }
+  Logic:    Validate symbol in market list, create PriceAlert
+
+# Route: DELETE /alerts/:id
+  Auth:     requireAuth
+  Logic:    Soft delete — set triggeredAt = now() (reuse field to mark dismissed)
+
+# BullMQ repeatable job: alert-checker (every 30 seconds)
+  Logic:
+    1. Find all PriceAlert where triggeredAt IS NULL
+    2. For each alert: GET market:mid:{symbol} from Redis
+    3. If direction='above' and price >= threshold: enqueue sendNotification job,
+       set triggeredAt = now()
+    4. If direction='below' and price <= threshold: same
+
+# BullMQ processor: send-notification
+  Job payload: { userId: string, alertId: string, symbol: string, price: string }
+  Logic:
+    1. Find Device records for userId
+    2. For each device:
+       - platform='android': firebase-admin messaging().send()
+       - platform='ios': node-apn provider.send()
+    3. On push failure: fall back to SMS via twilio if user has phone on file
+    4. Log outcome, do not retry on delivery failure (alert is one-shot)
+
+# Route: POST /webhooks/onramp
+  Middleware: verifyWebhook (HMAC check)
+  Body:       MoonPay/Transak webhook payload
+  Logic:
+    1. Parse { walletAddress, amountUsd, status } from payload
+    2. Only process status='completed' events — ack and ignore others
+    3. Find User by walletAddress
+    4. Write a deposit XpEvent ({ reason: 'deposit', amount: Math.floor(amountUsd) })
+    5. Return 200 { received: true } immediately — processing is async
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 14. OBSERVABILITY — APPLY TO EVERY MODULE
+# ─────────────────────────────────────────────────────────────────────────────
+
+# OpenTelemetry
+  - Init in apps/api/src/plugins/otel.ts and apps/worker/src/otel.ts
+  - Register BEFORE all other plugins — OTel must patch modules at require time
+  - Instrumentations: fastify, http, pg, ioredis, BullMQ
+  - In dev: export spans to console (ConsoleSpanExporter)
+  - In prod: export to OTLP endpoint (OTEL_EXPORTER_OTLP_ENDPOINT from env)
+  - Add custom span attributes: { 'user.id': userId, 'market.symbol': symbol }
+    on relevant operations
+
+# Pino
+  - One logger instance per app, configured with:
+    { level: config.LOG_LEVEL, redact: ['body.signature', 'body.refreshToken',
+      'headers.authorization'] }
+  - Use child loggers for each request: logger.child({ reqId, userId })
+  - Log levels: error (AppError 5xx), warn (AppError 4xx), info (route hit),
+    debug (Hyperliquid WS events)
+  - Never log: private keys, raw tokens, full webhook payloads (log only
+    { type, walletAddress } from webhook)
+
+# Sentry
+  - Init with dsn from env, tracesSampleRate: 0.1 in prod, 1.0 in dev
+  - Capture: all unhandled errors in setErrorHandler, WS fatal reconnect events,
+    BullMQ job failures after all retries exhausted
+  - Set user context on Sentry scope when JWT is verified:
+    Sentry.setUser({ id: userId, wallet: walletAddress })
+
+# Health endpoint: GET /health
+  Response: {
+    status: 'ok' | 'degraded',
+    version: string,           ← from package.json
+    uptime: number,            ← process.uptime()
+    db: 'ok' | 'error',       ← SELECT 1 result
+    redis: 'ok' | 'error',    ← PING result
+    hyperliquid: 'ok' | 'error'  ← last WS heartbeat < 30s ago
+  }
+  Status code: 200 if all ok, 503 if any dependency is 'error'
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 15. ENVIRONMENT VARIABLES — ALL REQUIRED KEYS
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Defined and validated in packages/config/src/schema.ts using Zod
+# App fails at startup with a clear error if any required key is missing
+
+DATABASE_URL              postgresql://user:pass@localhost:5432/dreamapi
+REDIS_URL                 redis://localhost:6379
+JWT_SECRET                min 64 chars, random
+JWT_REFRESH_SECRET        min 64 chars, random, different from JWT_SECRET
+TRADING_PRIVATE_KEY       0x... Ethereum private key for order signing
+WEBHOOK_SECRET            min 32 chars, used for HMAC verification
+SENTRY_DSN                optional in dev, required in prod
+OTEL_EXPORTER_OTLP_ENDPOINT  optional in dev, required in prod
+FCM_PROJECT_ID            Firebase project ID
+FCM_CLIENT_EMAIL          Firebase service account email
+FCM_PRIVATE_KEY           Firebase service account private key
+APNS_KEY_ID               Apple APNs key ID
+APNS_TEAM_ID              Apple team ID
+APNS_KEY_PATH             Path to .p8 key file
+TWILIO_ACCOUNT_SID        optional — SMS fallback
+TWILIO_AUTH_TOKEN         optional — SMS fallback
+TWILIO_FROM_NUMBER        optional — SMS fallback
+LOG_LEVEL                 'debug' | 'info' | 'warn' | 'error', default 'info'
+NODE_ENV                  'development' | 'test' | 'production'
+PORT                      default 3000
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 16. TESTING RULES
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Unit tests (packages/*)
+  - Test every service function, every utility, every processor
+  - Test the Result type contract — both ok and error branches
+  - No mocking of Prisma — tests use a real test database (DATABASE_URL_TEST)
+  - Do mock: Hyperliquid API client, Redis, BullMQ (return jobs immediately)
+  - Use vi.mock() from Vitest for external service mocks
+
+# Integration tests (apps/api/tests/integration/)
+  - Use Supertest with buildApp() — no real server
+  - Each test file uses a beforeEach that truncates relevant tables
+  - Test the full HTTP contract: status codes, response shapes, error bodies
+  - Auth routes: test nonce generation, signature verification flow (mock viem)
+  - Market routes: test with mocked Hyperliquid client + pre-seeded Redis
+  - Trading routes: test order validation rejection cases thoroughly
+
+# Test database setup
+  - docker-compose.test.yml spins up a separate postgres on port 5433
+  - vitest.config.ts sets up globalSetup to run prisma migrate deploy
+  - DATABASE_URL_TEST used in test environment
+
+# Coverage target: 80% line coverage across all packages
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 17. DOCKER + CI/CD
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Dockerfile pattern (multi-stage, same pattern for api and worker)
+  Stage 1 — deps:    FROM node:20-alpine, install only prod deps
+  Stage 2 — builder: install all deps, run tsc, prisma generate
+  Stage 3 — runner:  copy built output + prod node_modules, non-root user, ENTRYPOINT
+
+# docker-compose.yml services (infra/docker-compose.yml)
+  postgres:    postgres:16-alpine, port 5432, health check
+  redis:       redis:7-alpine, port 6379, health check
+  db-migrate:  dreamapi/api image, runs `prisma migrate deploy`, depends on postgres,
+               restartPolicy: on-failure, exits after completion
+  api:         dreamapi/api image, port 3000, depends_on: [db-migrate, redis],
+               environment from .env file
+  worker:      dreamapi/worker image, depends_on: [db-migrate, redis, api]
+
+# GitHub Actions (.github/workflows/ci.yml)
+  Triggers: push and pull_request to main
+  Jobs:
+    lint:        pnpm lint (eslint + prettier --check)
+    typecheck:   pnpm typecheck (tsc --noEmit in all packages)
+    test:        services: [postgres:16, redis:7], pnpm test --coverage
+    docker:      build api + worker images, push to ghcr.io on main only
+  Cache:         cache pnpm store between runs
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 18. BUILD ORDER — FOLLOW THIS EXACTLY
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Each step must be in a working, committed state before starting the next.
+# Do not skip ahead. Cursor should complete each step fully before moving on.
+
+Step 1:   Monorepo scaffold
+          - turbo.json, root package.json, pnpm-workspace.yaml
+          - packages/config: zod env schema, export validated config
+          - packages/types: empty index.ts with placeholder type
+          - Confirm: `pnpm install` succeeds from root
+
+Step 2:   Docker Compose environment
+          - infra/docker-compose.yml with postgres + redis
+          - Confirm: `docker compose up postgres redis` → both healthy
+
+Step 3:   packages/db
+          - Prisma schema (all models from section 6.2 above)
+          - prisma migrate dev --name init
+          - Export PrismaClient singleton
+          - Confirm: `prisma studio` shows all tables
+
+Step 4:   packages/hyperliquid
+          - HyperliquidWsClient class (EventEmitter, reconnection logic)
+          - REST client wrapper (getMetaAndAssetCtxs, getL2Snapshot, placeOrder)
+          - All methods return Result<T>
+          - Confirm: unit tests pass, WS client connects to Hyperliquid testnet
+
+Step 5:   packages/queue
+          - Queue definitions (xpEvents, sendNotification, alertChecker,
+            leaderboardSnapshot)
+          - Job payload interfaces
+          - Confirm: TypeScript compiles, queues connect to Redis
+
+Step 6:   apps/api bootstrap
+          - buildApp() factory, Pino, Sentry, OTel, Swagger, CORS, rate-limit
+          - GET /health endpoint
+          - Confirm: server starts, /health returns 200, /docs renders
+
+Step 7:   GitHub Actions CI
+          - ci.yml with lint + typecheck + test + docker-build jobs
+          - Confirm: pipeline passes on a clean push
+
+Step 8:   Auth module
+          - POST /auth/nonce, /auth/verify, /auth/refresh, /auth/logout
+          - verifyWebhook middleware
+          - requireAuth preHandler
+          - Integration tests for all auth routes
+          - Confirm: full sign-in flow works end-to-end
+
+Step 9:   Market data module
+          - HyperliquidWsClient started in app.ts
+          - Redis cache writes on allMids + l2Book events
+          - GET /markets, GET /markets/:symbol/orderbook, GET /markets/:symbol/price
+          - WebSocket broadcast server
+          - Confirm: connect to WS, subscribe to BTC, receive live prices
+
+Step 10:  apps/worker bootstrap
+          - Worker entry point, Pino, Sentry, OTel
+          - BullMQ worker setup (empty processors registered)
+          - Confirm: worker starts, connects to Redis, shows queue names
+
+Step 11:  Trading module
+          - POST /orders with risk validation
+          - GET /orders, GET /positions, GET /portfolio/history
+          - Fill tracking via Hyperliquid userEvents subscription
+          - xpEvents job published on fill
+          - Integration tests for order validation rejection cases
+          - Confirm: order submission reaches Hyperliquid (use testnet)
+
+Step 12:  Points engine
+          - xp-events BullMQ processor in worker
+          - Referral propagation (3 levels, 10% passthrough)
+          - POST /referrals/register
+          - leaderboardSnapshot repeatable job
+          - GET /leaderboard, GET /me/points
+          - Unit tests for XP calculation and referral propagation
+          - Confirm: submit a trade → fill → XP event → leaderboard updated
+
+Step 13:  Notifications
+          - POST /devices, POST /alerts, DELETE /alerts/:id
+          - alertChecker repeatable job
+          - send-notification processor (FCM + APNs + SMS fallback)
+          - POST /webhooks/onramp
+          - Confirm: create alert → mock price threshold crossing → notification job fires
+
+Step 14:  Polish and documentation
+          - Orval config for TypeScript client codegen from OpenAPI spec
+          - README with architecture diagram, quick start, module overview,
+            environment variables table
+          - Bruno/Postman collection covering all endpoints
+          - Final: `docker compose up` from zero, all tests pass, /docs renders
+          - Confirm: zero TypeScript errors in strict mode, CI green
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 19. WHAT GOOD CODE LOOKS LIKE IN THIS PROJECT
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Good — follows all rules
+  export async function verifyWalletSignature(
+    walletAddress: Address,
+    signature: Hex,
+    nonce: string,
+  ): Promise<Result<User>> {
+    const stored = await redis.get(`auth:nonce:${walletAddress}`)
+    if (!stored) {
+      return { ok: false, error: new UnauthorizedError('NONCE_EXPIRED', 'Nonce expired or not found') }
+    }
+    const valid = await verifyTypedData({ address: walletAddress, signature, ... })
+    if (!valid) {
+      return { ok: false, error: new UnauthorizedError('INVALID_SIGNATURE', 'Signature verification failed') }
+    }
+    await redis.del(`auth:nonce:${walletAddress}`)
+    const user = await prisma.user.upsert({
+      where: { walletAddress },
+      create: { walletAddress },
+      update: {},
+    })
+    return { ok: true, data: user }
+  }
+
+# Bad — do not write this
+  export async function verifyWalletSignature(walletAddress: any, signature: any) {
+    try {
+      const nonce = await redis.get(`auth:nonce:${walletAddress}`)
+      const valid = await verifyTypedData({ address: walletAddress, signature, ... })
+      if (!valid) throw new Error('bad sig')
+      const user = await prisma.user.upsert({ where: { walletAddress }, create: { walletAddress }, update: {} })
+      return user
+    } catch (e) {
+      console.error(e)
+      throw e
+    }
+  }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 20. FINAL REMINDERS
+# ─────────────────────────────────────────────────────────────────────────────
+
+- When in doubt about the Hyperliquid API shape, check:
+  https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api
+
+- This project will be used as a job application. Treat every file as if
+  a senior engineer is doing a thorough code review.
+
+- Prefer explicit over clever. Clear variable names, obvious data flow,
+  comments where the "why" is not obvious from the code.
+
+- If you are about to write a TODO or a stub, implement it instead.
+  Stubs are fine in Step 1 scaffolding only.
+
+- Every error response must include: { code: string, message: string }
+  Dreamcash's mobile app will display these to users.
+
+- The project succeeds when: `git clone` → `docker compose up` → open /docs
+  → every route is documented and callable with one command.
+  That is the bar. Build to it.
