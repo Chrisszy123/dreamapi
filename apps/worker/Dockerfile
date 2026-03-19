@@ -16,7 +16,7 @@ RUN pnpm install --frozen-lockfile --prod
 FROM node:20-alpine AS builder
 RUN corepack enable && corepack prepare pnpm@10.32.1 --activate
 WORKDIR /app
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json turbo.json ./
 COPY apps/worker/ apps/worker/
 COPY packages/ packages/
 RUN pnpm install --frozen-lockfile
