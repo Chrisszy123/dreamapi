@@ -50,13 +50,13 @@ export class HyperliquidRestClient {
       }
 
       const data = (await response.json()) as [
-        MetaAndAssetCtx['universe'],
+        { universe: MetaAndAssetCtx['universe'] },
         MetaAndAssetCtx['assetCtxs'],
       ];
 
       return {
         ok: true,
-        data: { universe: data[0] as unknown as MetaAndAssetCtx['universe'], assetCtxs: data[1] as unknown as MetaAndAssetCtx['assetCtxs'] },
+        data: { universe: data[0].universe, assetCtxs: data[1] },
       };
     } catch (error) {
       return {
