@@ -8,6 +8,9 @@ importers:
 
   .:
     devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
       prettier:
         specifier: ^3.5.0
         version: 3.8.1
@@ -17,6 +20,9 @@ importers:
       typescript:
         specifier: ^5.8.0
         version: 5.9.3
+      viem:
+        specifier: ^2.27.0
+        version: 2.47.5(typescript@5.9.3)(zod@3.25.76)
 
   apps/api:
     dependencies:
@@ -1606,6 +1612,9 @@ packages:
 
   '@types/node@20.19.37':
     resolution: {integrity: sha512-8kzdPJ3FsNsVIurqBs7oodNnCEVbni9yUEkaHbgptDACOPW04jimGagZ51E6+lXUwJjgnBw+hyko/lkFWCldqw==}
+
+  '@types/node@22.19.15':
+    resolution: {integrity: sha512-F0R/h2+dsy5wJAUe3tAU6oqa2qbWY5TpNfL/RGmo1y38hiyO1w3x2jPtt76wmuaJI4DQnOBu21cNXQ2STIUUWg==}
 
   '@types/pg-pool@2.0.6':
     resolution: {integrity: sha512-TaAUE5rq2VQYxab5Ts7WZhKNmuN78Q6PiFonTDdpbx8a1H0M1vhy3rhiMjl+e2iHmogyMw7jZF4FrE6eJUy5HQ==}
@@ -4838,6 +4847,10 @@ snapshots:
       '@types/node': 20.19.37
 
   '@types/node@20.19.37':
+    dependencies:
+      undici-types: 6.21.0
+
+  '@types/node@22.19.15':
     dependencies:
       undici-types: 6.21.0
 
