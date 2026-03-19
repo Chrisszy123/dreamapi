@@ -35,9 +35,6 @@ export async function requireAuth(
     await request.jwtVerify();
     // formatUser in app.ts maps payload to request.user
   } catch {
-    throw new UnauthorizedError(
-      'INVALID_TOKEN',
-      'Invalid or expired token',
-    );
+    throw new UnauthorizedError('INVALID_TOKEN', 'Invalid or expired token');
   }
 }

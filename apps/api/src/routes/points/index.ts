@@ -72,7 +72,10 @@ async function pointsRoutes(
           type: 'object',
           required: ['referralCode'],
           properties: {
-            referralCode: { type: 'string', description: 'Referral code to register with' },
+            referralCode: {
+              type: 'string',
+              description: 'Referral code to register with',
+            },
           },
         },
         response: {
@@ -133,7 +136,10 @@ async function pointsRoutes(
       if (!result.ok) {
         return reply.status(500).send({
           code: 'LEADERBOARD_FETCH_FAILED',
-          message: result.error instanceof Error ? result.error.message : 'Failed to fetch leaderboard',
+          message:
+            result.error instanceof Error
+              ? result.error.message
+              : 'Failed to fetch leaderboard',
         });
       }
 
@@ -164,7 +170,10 @@ async function pointsRoutes(
       if (!result.ok) {
         return reply.status(500).send({
           code: 'POINTS_FETCH_FAILED',
-          message: result.error instanceof Error ? result.error.message : 'Failed to fetch points',
+          message:
+            result.error instanceof Error
+              ? result.error.message
+              : 'Failed to fetch points',
         });
       }
 

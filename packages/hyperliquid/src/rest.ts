@@ -24,7 +24,6 @@ export interface OrderExchangeAction {
   grouping: 'na';
 }
 
-
 const HYPERLIQUID_API_URL = 'https://api.hyperliquid.xyz';
 
 export class HyperliquidRestClient {

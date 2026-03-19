@@ -1,13 +1,9 @@
 import { z } from 'zod';
 
 export const envSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(3000),
-  LOG_LEVEL: z
-    .enum(['debug', 'info', 'warn', 'error'])
-    .default('info'),
+  LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 
   DATABASE_URL: z.string().url(),
 

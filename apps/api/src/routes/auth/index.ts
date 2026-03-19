@@ -104,8 +104,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const user = verifyResult.data;
-      const { raw: refreshToken, hash: refreshTokenHash } =
-        generateRefreshToken();
+      const { raw: refreshToken, hash: refreshTokenHash } = generateRefreshToken();
 
       const sessionResult = await createSessionRecord(
         user.id,
@@ -166,8 +165,7 @@ export default async function authRoutes(app: FastifyInstance): Promise<void> {
 
       const { userId, sessionId, walletAddress } = sessionResult.data;
 
-      const { raw: newRefreshToken, hash: newRefreshTokenHash } =
-        generateRefreshToken();
+      const { raw: newRefreshToken, hash: newRefreshTokenHash } = generateRefreshToken();
 
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 

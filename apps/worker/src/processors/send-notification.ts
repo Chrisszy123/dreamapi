@@ -30,7 +30,8 @@ export async function processSendNotificationJob(
         data,
       });
       if (!result.ok) {
-        const msg = result.error instanceof Error ? result.error.message : String(result.error);
+        const msg =
+          result.error instanceof Error ? result.error.message : String(result.error);
         job.log(`FCM failed for device ${device.deviceId}: ${msg}`);
       }
     } else if (device.platform === 'ios') {
@@ -41,7 +42,8 @@ export async function processSendNotificationJob(
         data,
       });
       if (!result.ok) {
-        const msg = result.error instanceof Error ? result.error.message : String(result.error);
+        const msg =
+          result.error instanceof Error ? result.error.message : String(result.error);
         job.log(`APNs failed for device ${device.deviceId}: ${msg}`);
       }
     }

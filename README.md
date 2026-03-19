@@ -92,47 +92,47 @@ Interactive Swagger UI: **[http://localhost:3000/docs](http://localhost:3000/doc
 
 ## Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `NODE_ENV` | Environment mode | `development`, `test`, `production` |
-| `PORT` | HTTP server port | `3000` |
-| `LOG_LEVEL` | Pino log level | `debug`, `info`, `warn`, `error` |
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://dreamapi:dreamapi@localhost:5432/dreamapi` |
-| `REDIS_URL` | Redis connection string | `redis://localhost:6379` |
-| `JWT_SECRET` | Access token signing secret (min 64 chars) | Generate with `openssl rand -hex 64` |
-| `JWT_REFRESH_SECRET` | Refresh token signing secret (min 64 chars) | Generate with `openssl rand -hex 64` |
-| `TRADING_PRIVATE_KEY` | Ethereum private key for order signing | `0x...` |
-| `WEBHOOK_SECRET` | HMAC secret for webhook verification (min 32 chars) | Generate with `openssl rand -hex 16` |
-| `SENTRY_DSN` | Sentry project DSN (optional in dev) | `https://...@sentry.io/...` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP endpoint (optional in dev) | `http://localhost:4318` |
-| `FCM_PROJECT_ID` | Firebase project ID (optional) | — |
-| `FCM_CLIENT_EMAIL` | Firebase service account email (optional) | — |
-| `FCM_PRIVATE_KEY` | Firebase private key (optional) | — |
-| `APNS_KEY_ID` | Apple APNs key ID (optional) | — |
-| `APNS_TEAM_ID` | Apple team ID (optional) | — |
-| `APNS_KEY_PATH` | Path to APNs .p8 key file (optional) | `./certs/AuthKey.p8` |
-| `TWILIO_ACCOUNT_SID` | Twilio account SID (optional) | — |
-| `TWILIO_AUTH_TOKEN` | Twilio auth token (optional) | — |
-| `TWILIO_FROM_NUMBER` | Twilio sender number (optional) | `+15551234567` |
-| `HIP3_XP_MULTIPLIER` | XP multiplier for HIP-3 trades | `2` |
-| `XP_PER_DOLLAR` | Base XP per $1 volume | `1` |
-| `REFERRAL_PASSTHROUGH_RATE` | Referral XP passthrough per level | `0.1` |
-| `MAX_REFERRAL_DEPTH` | Max referral propagation levels | `3` |
+| Variable                      | Description                                         | Example                                                  |
+| ----------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
+| `NODE_ENV`                    | Environment mode                                    | `development`, `test`, `production`                      |
+| `PORT`                        | HTTP server port                                    | `3000`                                                   |
+| `LOG_LEVEL`                   | Pino log level                                      | `debug`, `info`, `warn`, `error`                         |
+| `DATABASE_URL`                | PostgreSQL connection string                        | `postgresql://dreamapi:dreamapi@localhost:5432/dreamapi` |
+| `REDIS_URL`                   | Redis connection string                             | `redis://localhost:6379`                                 |
+| `JWT_SECRET`                  | Access token signing secret (min 64 chars)          | Generate with `openssl rand -hex 64`                     |
+| `JWT_REFRESH_SECRET`          | Refresh token signing secret (min 64 chars)         | Generate with `openssl rand -hex 64`                     |
+| `TRADING_PRIVATE_KEY`         | Ethereum private key for order signing              | `0x...`                                                  |
+| `WEBHOOK_SECRET`              | HMAC secret for webhook verification (min 32 chars) | Generate with `openssl rand -hex 16`                     |
+| `SENTRY_DSN`                  | Sentry project DSN (optional in dev)                | `https://...@sentry.io/...`                              |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry OTLP endpoint (optional in dev)       | `http://localhost:4318`                                  |
+| `FCM_PROJECT_ID`              | Firebase project ID (optional)                      | —                                                        |
+| `FCM_CLIENT_EMAIL`            | Firebase service account email (optional)           | —                                                        |
+| `FCM_PRIVATE_KEY`             | Firebase private key (optional)                     | —                                                        |
+| `APNS_KEY_ID`                 | Apple APNs key ID (optional)                        | —                                                        |
+| `APNS_TEAM_ID`                | Apple team ID (optional)                            | —                                                        |
+| `APNS_KEY_PATH`               | Path to APNs .p8 key file (optional)                | `./certs/AuthKey.p8`                                     |
+| `TWILIO_ACCOUNT_SID`          | Twilio account SID (optional)                       | —                                                        |
+| `TWILIO_AUTH_TOKEN`           | Twilio auth token (optional)                        | —                                                        |
+| `TWILIO_FROM_NUMBER`          | Twilio sender number (optional)                     | `+15551234567`                                           |
+| `HIP3_XP_MULTIPLIER`          | XP multiplier for HIP-3 trades                      | `2`                                                      |
+| `XP_PER_DOLLAR`               | Base XP per $1 volume                               | `1`                                                      |
+| `REFERRAL_PASSTHROUGH_RATE`   | Referral XP passthrough per level                   | `0.1`                                                    |
+| `MAX_REFERRAL_DEPTH`          | Max referral propagation levels                     | `3`                                                      |
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Runtime | Node.js 20 LTS |
-| Language | TypeScript 5 (strict) |
-| Framework | Fastify 4 + Swagger + WebSocket |
-| ORM | Prisma 5 — PostgreSQL 16 |
-| Cache / Queues | Redis 7, BullMQ |
-| Blockchain | @nktkas/hyperliquid, viem |
-| Monorepo | Turborepo, pnpm workspaces |
-| Observability | OpenTelemetry, Sentry, Pino |
-| Testing | Vitest, Supertest |
-| Notifications | firebase-admin (FCM), node-apn (APNs), Twilio (SMS) |
-| Validation | Zod |
-| Container | Docker, Docker Compose |
-| CI | GitHub Actions |
+| Layer          | Technology                                          |
+| -------------- | --------------------------------------------------- |
+| Runtime        | Node.js 20 LTS                                      |
+| Language       | TypeScript 5 (strict)                               |
+| Framework      | Fastify 4 + Swagger + WebSocket                     |
+| ORM            | Prisma 5 — PostgreSQL 16                            |
+| Cache / Queues | Redis 7, BullMQ                                     |
+| Blockchain     | @nktkas/hyperliquid, viem                           |
+| Monorepo       | Turborepo, pnpm workspaces                          |
+| Observability  | OpenTelemetry, Sentry, Pino                         |
+| Testing        | Vitest, Supertest                                   |
+| Notifications  | firebase-admin (FCM), node-apn (APNs), Twilio (SMS) |
+| Validation     | Zod                                                 |
+| Container      | Docker, Docker Compose                              |
+| CI             | GitHub Actions                                      |

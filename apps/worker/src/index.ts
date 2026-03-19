@@ -36,16 +36,14 @@ async function main(): Promise<void> {
     { triggeredAt: new Date().toISOString() },
     { repeat: { pattern: '0 0 * * *' } },
   );
-  logger.info('Repeatable jobs scheduled: alertChecker (30s), leaderboardSnapshot (midnight UTC)');
-
-  const xpEventsWorker = new Worker(
-    'xpEvents',
-    async (job) => processXpEventJob(job),
-    {
-      connection,
-      concurrency: 5,
-    },
+  logger.info(
+    'Repeatable jobs scheduled: alertChecker (30s), leaderboardSnapshot (midnight UTC)',
   );
+
+  const xpEventsWorker = new Worker('xpEvents', async (job) => processXpEventJob(job), {
+    connection,
+    concurrency: 5,
+  });
 
   const leaderboardSnapshotWorker = new Worker(
     'leaderboardSnapshot',

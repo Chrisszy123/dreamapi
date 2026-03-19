@@ -15,7 +15,9 @@ function loadDotEnv(): void {
     const candidate = path.join(dir, '.env');
     if (fs.existsSync(candidate)) {
       // process.loadEnvFile is available since Node 20.12 — we run on Node 22
-      (process as NodeJS.Process & { loadEnvFile: (p: string) => void }).loadEnvFile(candidate);
+      (process as NodeJS.Process & { loadEnvFile: (p: string) => void }).loadEnvFile(
+        candidate,
+      );
       return;
     }
     const parent = path.dirname(dir);

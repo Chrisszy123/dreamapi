@@ -10,9 +10,7 @@ import type { AlertCheckerJob, SendNotificationJob } from '@dreamapi/queue';
  * BullMQ processor for alert checker. Runs every 30 seconds.
  * Finds all untriggered PriceAlerts, checks Redis prices, enqueues sendNotification when threshold crossed.
  */
-export async function processAlertCheckerJob(
-  _job: Job<AlertCheckerJob>,
-): Promise<void> {
+export async function processAlertCheckerJob(_job: Job<AlertCheckerJob>): Promise<void> {
   const config = loadConfig();
   const redis = new Redis(config.REDIS_URL);
 

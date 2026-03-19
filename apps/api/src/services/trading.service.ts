@@ -80,10 +80,7 @@ export async function submitOrder(
   if (accountValue <= 0) {
     return {
       ok: false,
-      error: new ValidationError(
-        'INSUFFICIENT_EQUITY',
-        'Account has no equity to trade',
-      ),
+      error: new ValidationError('INSUFFICIENT_EQUITY', 'Account has no equity to trade'),
     };
   }
 

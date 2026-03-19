@@ -3,11 +3,7 @@ import type { PrismaClient } from '@dreamapi/db';
 import type { Result } from '@dreamapi/types';
 import type { XpEvent } from '@dreamapi/db';
 
-import {
-  ConflictError,
-  NotFoundError,
-  ValidationError,
-} from '../errors.js';
+import { ConflictError, NotFoundError, ValidationError } from '../errors.js';
 
 const LEADERBOARD_KEY = 'leaderboard:global';
 const LEADERBOARD_LIMIT = 100;
@@ -39,10 +35,7 @@ export async function registerReferral(
   if (!code) {
     return {
       ok: false,
-      error: new ValidationError(
-        'INVALID_REFERRAL_CODE',
-        'Referral code is required',
-      ),
+      error: new ValidationError('INVALID_REFERRAL_CODE', 'Referral code is required'),
     };
   }
 
@@ -67,10 +60,7 @@ export async function registerReferral(
   if (referrerId === userId) {
     return {
       ok: false,
-      error: new ValidationError(
-        'SELF_REFERRAL',
-        'Cannot use your own referral code',
-      ),
+      error: new ValidationError('SELF_REFERRAL', 'Cannot use your own referral code'),
     };
   }
 
@@ -81,10 +71,7 @@ export async function registerReferral(
   if (existingReferral) {
     return {
       ok: false,
-      error: new ConflictError(
-        'ALREADY_REFERRED',
-        'You have already been referred',
-      ),
+      error: new ConflictError('ALREADY_REFERRED', 'You have already been referred'),
     };
   }
 
@@ -143,24 +130,29 @@ export async function getUserPoints(
   redis: Redis,
   prisma: PrismaClient,
 ): Promise<Result<UserPointsSummary>> {
-  const [totalResult, rankResult, referralCountResult, referralCodeResult, recentEventsResult] =
-    await Promise.all([
-      prisma.xpEvent.aggregate({
-        where: { userId },
-        _sum: { amount: true },
-      }),
-      redis.zrevrank(LEADERBOARD_KEY, userId),
-      prisma.referral.count({ where: { referrerId: userId } }),
-      prisma.referralCode.findUnique({
-        where: { userId },
-        select: { code: true },
-      }),
-      prisma.xpEvent.findMany({
-        where: { userId },
-        orderBy: { createdAt: 'desc' },
-        take: 20,
-      }),
-    ]);
+  const [
+    totalResult,
+    rankResult,
+    referralCountResult,
+    referralCodeResult,
+    recentEventsResult,
+  ] = await Promise.all([
+    prisma.xpEvent.aggregate({
+      where: { userId },
+      _sum: { amount: true },
+    }),
+    redis.zrevrank(LEADERBOARD_KEY, userId),
+    prisma.referral.count({ where: { referrerId: userId } }),
+    prisma.referralCode.findUnique({
+      where: { userId },
+      select: { code: true },
+    }),
+    prisma.xpEvent.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }),
+  ]);
 
   const totalXp = totalResult._sum.amount ?? 0;
   const rank = rankResult !== null ? rankResult + 1 : 0;

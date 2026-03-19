@@ -1,11 +1,7 @@
 import type { FastifyInstance, FastifyPluginOptions } from 'fastify';
 import fp from 'fastify-plugin';
 
-import {
-  getAllMarkets,
-  getOrderbook,
-  getPrice,
-} from '../../services/market.service.js';
+import { getAllMarkets, getOrderbook, getPrice } from '../../services/market.service.js';
 import { NotFoundError } from '../../errors.js';
 
 const marketInfoSchema = {
@@ -94,7 +90,10 @@ async function marketsRoutes(
       if (!result.ok) {
         return reply.status(500).send({
           code: 'MARKET_FETCH_FAILED',
-          message: result.error instanceof Error ? result.error.message : 'Failed to fetch markets',
+          message:
+            result.error instanceof Error
+              ? result.error.message
+              : 'Failed to fetch markets',
         });
       }
 

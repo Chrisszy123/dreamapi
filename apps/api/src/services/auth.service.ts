@@ -69,10 +69,7 @@ export async function verifyWalletSignature(
   if (!storedRaw) {
     return {
       ok: false,
-      error: new UnauthorizedError(
-        'NONCE_EXPIRED',
-        'Nonce expired or not found',
-      ),
+      error: new UnauthorizedError('NONCE_EXPIRED', 'Nonce expired or not found'),
     };
   }
 
@@ -82,10 +79,7 @@ export async function verifyWalletSignature(
   } catch {
     return {
       ok: false,
-      error: new UnauthorizedError(
-        'NONCE_EXPIRED',
-        'Invalid nonce format',
-      ),
+      error: new UnauthorizedError('NONCE_EXPIRED', 'Invalid nonce format'),
     };
   }
 
@@ -104,10 +98,7 @@ export async function verifyWalletSignature(
   if (!valid) {
     return {
       ok: false,
-      error: new UnauthorizedError(
-        'INVALID_SIGNATURE',
-        'Signature verification failed',
-      ),
+      error: new UnauthorizedError('INVALID_SIGNATURE', 'Signature verification failed'),
     };
   }
 
@@ -151,9 +142,7 @@ export async function createSessionRecord(
 export async function findSessionByToken(
   refreshToken: string,
   prisma: PrismaClient,
-): Promise<
-  Result<{ userId: string; sessionId: string; walletAddress: string }>
-> {
+): Promise<Result<{ userId: string; sessionId: string; walletAddress: string }>> {
   const hash = hashToken(refreshToken);
 
   const session = await prisma.session.findFirst({
@@ -167,20 +156,14 @@ export async function findSessionByToken(
   if (!session) {
     return {
       ok: false,
-      error: new UnauthorizedError(
-        'SESSION_NOT_FOUND',
-        'Session not found or revoked',
-      ),
+      error: new UnauthorizedError('SESSION_NOT_FOUND', 'Session not found or revoked'),
     };
   }
 
   if (session.expiresAt < new Date()) {
     return {
       ok: false,
-      error: new UnauthorizedError(
-        'SESSION_EXPIRED',
-        'Session has expired',
-      ),
+      error: new UnauthorizedError('SESSION_EXPIRED', 'Session has expired'),
     };
   }
 

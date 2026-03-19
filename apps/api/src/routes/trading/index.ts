@@ -89,7 +89,15 @@ const positionSchema = {
       },
     },
   },
-  required: ['coin', 'szi', 'entryPx', 'positionValue', 'unrealizedPnl', 'returnOnEquity', 'leverage'],
+  required: [
+    'coin',
+    'szi',
+    'entryPx',
+    'positionValue',
+    'unrealizedPnl',
+    'returnOnEquity',
+    'leverage',
+  ],
 } as const;
 
 async function tradingRoutes(
@@ -218,7 +226,10 @@ async function tradingRoutes(
       if (!result.ok) {
         return reply.status(500).send({
           code: 'TRADE_HISTORY_FAILED',
-          message: result.error instanceof Error ? result.error.message : 'Failed to fetch trade history',
+          message:
+            result.error instanceof Error
+              ? result.error.message
+              : 'Failed to fetch trade history',
         });
       }
 
@@ -252,7 +263,10 @@ async function tradingRoutes(
       if (!result.ok) {
         return reply.status(500).send({
           code: 'POSITIONS_FETCH_FAILED',
-          message: result.error instanceof Error ? result.error.message : 'Failed to fetch positions',
+          message:
+            result.error instanceof Error
+              ? result.error.message
+              : 'Failed to fetch positions',
         });
       }
 
@@ -306,7 +320,8 @@ async function tradingRoutes(
         const code = err instanceof AppError ? err.code : 'PORTFOLIO_HISTORY_FAILED';
         return reply.status(statusCode).send({
           code,
-          message: err instanceof Error ? err.message : 'Failed to fetch portfolio history',
+          message:
+            err instanceof Error ? err.message : 'Failed to fetch portfolio history',
         });
       }
 

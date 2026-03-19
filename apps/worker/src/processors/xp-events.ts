@@ -51,9 +51,7 @@ export async function processXpEventJob(job: Job<XpEventJob>): Promise<void> {
 
       if (!referral) break;
 
-      const propagatedAmount = Math.floor(
-        amountToPropagate * passthroughRate,
-      );
+      const propagatedAmount = Math.floor(amountToPropagate * passthroughRate);
       if (propagatedAmount < 1) break;
 
       await tx.xpEvent.create({

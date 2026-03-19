@@ -103,11 +103,7 @@ export async function getOrderbook(
     return { ok: false, error: result.error };
   }
 
-  await redis.setex(
-    key,
-    CACHE_TTL_SECONDS,
-    JSON.stringify(result.data),
-  );
+  await redis.setex(key, CACHE_TTL_SECONDS, JSON.stringify(result.data));
 
   return { ok: true, data: result.data };
 }
@@ -134,8 +130,7 @@ export async function getPrice(
   }
 
   const ttl = await redis.ttl(key);
-  const estimatedMsAgo =
-    ttl > 0 ? (CACHE_TTL_SECONDS - ttl) * 1000 : 0;
+  const estimatedMsAgo = ttl > 0 ? (CACHE_TTL_SECONDS - ttl) * 1000 : 0;
   const updatedAt = new Date(Date.now() - estimatedMsAgo).toISOString();
 
   return {

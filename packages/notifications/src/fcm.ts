@@ -10,7 +10,11 @@ export interface FcmPayload {
 
 let initialized = false;
 
-export function initFcm(_projectId: string, _clientEmail: string, _privateKey: string): void {
+export function initFcm(
+  _projectId: string,
+  _clientEmail: string,
+  _privateKey: string,
+): void {
   initialized = true;
 }
 

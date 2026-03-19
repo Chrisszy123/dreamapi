@@ -7,8 +7,7 @@ export async function verifyWebhook(
   request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
-  const rawBody = (request as FastifyRequest & { rawBody?: string | Buffer })
-    .rawBody;
+  const rawBody = (request as FastifyRequest & { rawBody?: string | Buffer }).rawBody;
 
   if (!rawBody) {
     throw new UnauthorizedError(
@@ -28,10 +27,7 @@ export async function verifyWebhook(
 
   const config = getConfig();
   const expectedSignature =
-    'sha256=' +
-    createHmac('sha256', config.WEBHOOK_SECRET)
-      .update(rawBody)
-      .digest('hex');
+    'sha256=' + createHmac('sha256', config.WEBHOOK_SECRET).update(rawBody).digest('hex');
 
   const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
   const actualBuffer = Buffer.from(signature, 'utf8');

@@ -23,19 +23,13 @@ export interface BuildAppOptions {
   disableRateLimit?: boolean;
 }
 
-export async function buildApp(
-  options: BuildAppOptions = {},
-): Promise<FastifyInstance> {
+export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const config = loadConfig();
 
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
-      redact: [
-        'body.signature',
-        'body.refreshToken',
-        'headers.authorization',
-      ],
+      redact: ['body.signature', 'body.refreshToken', 'headers.authorization'],
     },
   });
 
@@ -88,8 +82,7 @@ export async function buildApp(
     openapi: {
       info: {
         title: 'DreamAPI',
-        description:
-          'Production backend infrastructure for a Hyperliquid trading app',
+        description: 'Production backend infrastructure for a Hyperliquid trading app',
         version: '0.0.1',
       },
       components: {
@@ -132,9 +125,7 @@ export async function buildApp(
     return reply.status(500).send({
       code: 'INTERNAL_SERVER_ERROR',
       message:
-        config.NODE_ENV === 'production'
-          ? 'An unexpected error occurred'
-          : message,
+        config.NODE_ENV === 'production' ? 'An unexpected error occurred' : message,
     });
   });
 
@@ -188,8 +179,7 @@ export async function buildApp(
         redisStatus = 'error';
       }
 
-      const overallStatus =
-        dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded';
+      const overallStatus = dbStatus === 'ok' && redisStatus === 'ok' ? 'ok' : 'degraded';
 
       const response = {
         status: overallStatus,
