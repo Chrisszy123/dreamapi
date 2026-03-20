@@ -40,6 +40,10 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 # Copy built packages (dist + prisma schema for migrations)
 COPY --from=builder /app/packages ./packages
 
+# Startup script — runs migrations then starts the server
+COPY apps/api/start.sh ./start.sh
+RUN chmod +x start.sh
+
 USER dreamapi
 EXPOSE 3000
-ENTRYPOINT ["node", "apps/api/dist/server.js"]
+ENTRYPOINT ["sh", "start.sh"]

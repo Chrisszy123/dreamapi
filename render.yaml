@@ -22,7 +22,6 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    preDeployCommand: pnpm -F @dreamapi/db exec prisma migrate deploy
     envVars:
       - key: NODE_ENV
         value: production
