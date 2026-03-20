@@ -1,0 +1,127 @@
+databases:
+  - name: dreamapi-db
+    databaseName: dreamapi
+    user: dreamapi
+    plan: free
+    region: oregon
+
+services:
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  - type: redis
+    name: dreamapi-redis
+    plan: free
+    region: oregon
+    ipAllowList: [] # internal only
+
+  # ── API ──────────────────────────────────────────────────────────────────────
+  - type: web
+    name: dreamapi-api
+    region: oregon
+    runtime: docker
+    dockerfilePath: apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    preDeployCommand: pnpm -F @dreamapi/db exec prisma migrate deploy
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dreamapi-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: dreamapi-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: TRADING_PRIVATE_KEY
+        sync: false # set manually in dashboard — never commit this
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: SENTRY_DSN
+        sync: false # set manually if using Sentry
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false # set manually if using OpenTelemetry
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: FCM_CLIENT_EMAIL
+        sync: false
+      - key: FCM_PRIVATE_KEY
+        sync: false
+      - key: APNS_KEY_ID
+        sync: false
+      - key: APNS_TEAM_ID
+        sync: false
+      - key: APNS_KEY_PATH
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+
+  # ── Worker ───────────────────────────────────────────────────────────────────
+  - type: worker
+    name: dreamapi-worker
+    region: oregon
+    runtime: docker
+    dockerfilePath: apps/worker/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dreamapi-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: dreamapi-redis
+          property: connectionString
+      - key: JWT_SECRET
+        fromService:
+          type: web
+          name: dreamapi-api
+          envVarKey: JWT_SECRET
+      - key: JWT_REFRESH_SECRET
+        fromService:
+          type: web
+          name: dreamapi-api
+          envVarKey: JWT_REFRESH_SECRET
+      - key: TRADING_PRIVATE_KEY
+        sync: false
+      - key: WEBHOOK_SECRET
+        fromService:
+          type: web
+          name: dreamapi-api
+          envVarKey: WEBHOOK_SECRET
+      - key: SENTRY_DSN
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: FCM_PROJECT_ID
+        sync: false
+      - key: FCM_CLIENT_EMAIL
+        sync: false
+      - key: FCM_PRIVATE_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
